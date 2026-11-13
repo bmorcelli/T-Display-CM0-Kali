@@ -8,6 +8,8 @@ BOOT_DIR="/boot"
 [ -f /boot/firmware/cmdline.txt ] && BOOT_DIR="/boot/firmware"
 LOG_FILE="${SCRIPT_DIR}/firstrun-lilygo.log"
 INSTALLER="${SCRIPT_DIR}/lilygo_resources/install_lilygo_cm0_lite.sh"
+SWAP_SETUP="${SCRIPT_DIR}/setup_swap.sh"
+KALI_WAYLAND_DESKTOP="${SCRIPT_DIR}/lilygo_resources/kali_wayland_desktop/install.sh"
 FIRSTBOOT_SERVICE="/etc/systemd/system/lilygo-firstboot-install.service"
 RESOURCE_DIR="${SCRIPT_DIR}/lilygo_resources"
 
@@ -129,6 +131,16 @@ verify_installer_resources()
         return 1
     }
 
+    [ -f "${SWAP_SETUP}" ] || {
+        log "ERROR: swap setup script not found: ${SWAP_SETUP}"
+        return 1
+    }
+
+    [ -f "${KALI_WAYLAND_DESKTOP}" ] || {
+        log "ERROR: kali wayland desktop script not found: ${KALI_WAYLAND_DESKTOP}"
+        return 1
+    }
+
     for item in \
         "config.txt" \
         "app/keyboard_lilygo" \
@@ -170,7 +182,10 @@ Wants=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash ${INSTALLER} --mode lvgl --replace-config-file
+TimeoutStartSec=0
+ExecStartPre=/bin/bash ${SWAP_SETUP}
+ExecStart=/bin/bash ${INSTALLER} --mode raspberry --replace-config-file
+ExecStart=/bin/bash ${KALI_WAYLAND_DESKTOP}
 ExecStartPost=/bin/systemctl disable lilygo-firstboot-install.service
 ExecStartPost=/bin/systemctl reboot
 StandardOutput=journal+console

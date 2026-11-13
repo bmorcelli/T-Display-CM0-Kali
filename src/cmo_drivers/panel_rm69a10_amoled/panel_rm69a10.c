@@ -18,7 +18,7 @@ struct amoled_panel {
 };
 
 static const struct drm_display_mode rm69a10_default_mode = {
-    .clock       = 27331, /* kHz, 612 * 1276 * 60 */  //46857  23428
+    .clock       = 23428, /* kHz: matches the working Trixie module (~30 Hz). */
     .hdisplay    = 568,
     .hsync_start = 568 + 20,
     .hsync_end   = 568 + 20 + 4,
@@ -113,11 +113,7 @@ static int amoled_panel_prepare(struct drm_panel *panel)
     msleep(120);
 
     mipi_dsi_dcs_write_seq(p->dsi, 0x29);
-    
-     #if 0
-    msleep(60);
-    mipi_dsi_dcs_write_seq(p->dsi, 0x51, 0xBB);
-    #endif
+
     dev_info(dev, "panel prepare done\n");
     return 0;
 }
@@ -128,6 +124,7 @@ static int amoled_panel_enable(struct drm_panel *panel)
     struct device *dev = &p->dsi->dev;
 
     dev_info(dev, "panel enable\n");
+
     return 0;
 }
 

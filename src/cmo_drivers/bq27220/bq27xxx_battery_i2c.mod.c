@@ -19,18 +19,19 @@ __section(".gnu.linkonce.this_module") = {
 static const struct modversion_info ____versions[]
 __used __section("__versions") = {
 	{ 0xb1ad28e0, "__gnu_mcount_nc" },
-	{ 0x8c16b828, "i2c_register_driver" },
+	{ 0x8a855d6b, "i2c_register_driver" },
 	{ 0xefd6cf06, "__aeabi_unwind_cpp_pr0" },
 	{ 0x14b9f417, "bq27xxx_battery_teardown" },
 	{ 0xc1514a3b, "free_irq" },
 	{ 0x13150311, "bq27xxx_battery_update" },
+	{ 0x5f754e5a, "memset" },
 	{ 0x9d669763, "memcpy" },
-	{ 0xbed0b84d, "i2c_transfer" },
-	{ 0x1901e0f0, "i2c_smbus_read_i2c_block_data" },
+	{ 0xbc8ffd74, "i2c_transfer" },
+	{ 0x667b88fa, "i2c_smbus_read_i2c_block_data" },
 	{ 0xc3055d20, "usleep_range_state" },
 	{ 0xa24491bf, "ida_free" },
-	{ 0x5141c1c5, "i2c_del_driver" },
-	{ 0x4aed3ef3, "i2c_client_get_device_id" },
+	{ 0x573bd0e3, "i2c_del_driver" },
+	{ 0x7fd9ea98, "i2c_client_get_device_id" },
 	{ 0xa5684076, "ida_alloc_range" },
 	{ 0x40c48b95, "__devm_add_action" },
 	{ 0x37ae6eab, "devm_kasprintf" },
@@ -39,9 +40,9 @@ __used __section("__versions") = {
 	{ 0x2d3385d3, "system_wq" },
 	{ 0xcf86cdac, "queue_delayed_work_on" },
 	{ 0x92d5838e, "request_threaded_irq" },
-	{ 0x7256d921, "_dev_err" },
+	{ 0x5060a30f, "_dev_err" },
 	{ 0x9691726f, "bq27xxx_battery_battery_pm_ops" },
-	{ 0xf1ce2f51, "module_layout" },
+	{ 0x7d5dce20, "module_layout" },
 };
 
 MODULE_INFO(depends, "bq27xxx_battery");

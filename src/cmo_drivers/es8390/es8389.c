@@ -32,6 +32,7 @@
 struct	es8389_private {
 	struct regmap *regmap;
 	struct clk *mclk;
+	bool mclk_enabled;
 	unsigned int sysclk;
 	int mastermode;
 
@@ -39,6 +40,31 @@ struct	es8389_private {
 	enum snd_soc_bias_level bias_level;
 	struct gpio_desc *speaker_amp;
 };
+
+static int es8389_enable_mclk(struct es8389_private *es8389)
+{
+	int ret;
+
+	if (es8389->mclk_enabled)
+		return 0;
+
+	ret = clk_prepare_enable(es8389->mclk);
+	if (!ret)
+		es8389->mclk_enabled = true;
+
+	return ret;
+}
+
+static void es8389_disable_mclk(void *data)
+{
+	struct es8389_private *es8389 = data;
+
+	if (!es8389->mclk_enabled)
+		return;
+
+	clk_disable_unprepare(es8389->mclk);
+	es8389->mclk_enabled = false;
+}
 
 static bool es8389_volatile_register(struct device *dev,
 			unsigned int reg)
@@ -618,15 +644,15 @@ static int es8389_set_bias_level(struct snd_soc_component *component,
 
 	switch (level) {
 	case SND_SOC_BIAS_ON:
-		ret = clk_prepare_enable(es8389->mclk);
+		ret = es8389_enable_mclk(es8389);
 		if (ret)
 			return ret;	
 		regmap_update_bits(es8389->regmap, ES8389_MASTER_CLK,ES8389_CLK_SRC_MASK, es8389->mclk_src);//add by lv
 		regmap_update_bits(es8389->regmap, ES8389_HPSW, 0x20, 0x20);
 		regmap_write(es8389->regmap, ES8389_ANA_CTL1, 0xF9);//0xF9:es8390,default:0xD9
 		val=0xff;
-		regmap_read(es8389->regmap, ES8389_ANA_CTL1, &val);
-                 dev_info(component->dev, "first ES8389_ANA_CTL1=: 0x%02x\n", val);
+		if (!regmap_read(es8389->regmap, ES8389_ANA_CTL1, &val))
+			dev_dbg(component->dev, "ES8389_ANA_CTL1: 0x%02x\n", val);
 		//regmap_write(es8389->regmap, ES8389_ADC_EN, 0x8F);
 		//val=0xff;
 		//regmap_read(es8389->regmap, ES8389_ADC_EN, &val);
@@ -647,8 +673,8 @@ static int es8389_set_bias_level(struct snd_soc_component *component,
 		usleep_range(70000, 72000);
 		regmap_write(es8389->regmap, ES8389_ADC_EN, 0x8F);
 		val=0xff;
-		regmap_read(es8389->regmap, ES8389_ADC_EN, &val);
-                dev_info(component->dev, "second ADC_EN=0x8F: 0x%02x\n", val);
+		if (!regmap_read(es8389->regmap, ES8389_ADC_EN, &val))
+			dev_dbg(component->dev, "ADC_EN active: 0x%02x\n", val);
 		regmap_write(es8389->regmap, ES8389_DAC_RESET, 0X00);
 		break;
 	case SND_SOC_BIAS_PREPARE:
@@ -662,14 +688,14 @@ static int es8389_set_bias_level(struct snd_soc_component *component,
 		regmap_write(es8389->regmap, ES8389_ADC_EN, 0x30);//0x30 :es8390 ,default:0x00
 		regmap_write(es8389->regmap, ES8389_CLK_OFF1, 0x00);
 		val=0xff;
-		regmap_read(es8389->regmap, ES8389_ADC_EN, &val);
-                dev_info(component->dev, "after ADC_EN=: 0x%02x\n", val);
+		if (!regmap_read(es8389->regmap, ES8389_ADC_EN, &val))
+			dev_dbg(component->dev, "ADC_EN standby: 0x%02x\n", val);
 		regmap_write(es8389->regmap, ES8389_RESET, 0x3E);
 		regmap_update_bits(es8389->regmap, ES8389_DAC_INV, 0x80, 0x80);
 		usleep_range(8000, 8500);
 		regmap_update_bits(es8389->regmap, ES8389_DAC_INV, 0x80, 0x00);
 
-		clk_disable_unprepare(es8389->mclk);
+		es8389_disable_mclk(es8389);
 		break;
 	case SND_SOC_BIAS_OFF:
 		break;
@@ -865,23 +891,13 @@ static int es8389_probe(struct snd_soc_component *component)
 		es8389->mclk_src = ES8389_MAINCLK_FROM_MCLK | ES8389_MSTCLK_FROM_PAD;//ES8389_MCLK_SOURCE;
 	}
 	es8389->mclk_src &= ES8389_CLK_SRC_MASK;
-	es8389->mclk = devm_clk_get_optional(component->dev, "mclk");
-	if (IS_ERR(es8389->mclk))
-		return dev_err_probe(component->dev, PTR_ERR(es8389->mclk),
-			"ES8389 is unable to get mclk\n");
-
 	if (!es8389->mclk)
-		dev_err(component->dev, "%s, assuming static mclk\n", __func__);
+		dev_dbg(component->dev, "%s, assuming static mclk\n", __func__);
 
-	ret = clk_prepare_enable(es8389->mclk);
-	if (ret) {
-		dev_err(component->dev, "%s, unable to enable mclk\n", __func__);
-		return ret;
-	}
-	es8389->speaker_amp =devm_gpiod_get_optional(component->dev, "speaker-amp", GPIOD_OUT_LOW);
-        if (IS_ERR(es8389->speaker_amp)){
-    		return dev_err_probe(component->dev, PTR_ERR(es8389->speaker_amp),"failed to get speaker amp gpio\n");
-                         }
+	ret = es8389_enable_mclk(es8389);
+	if (ret)
+		return dev_err_probe(component->dev, ret, "unable to enable mclk\n");
+
 	es8389_init(component);
 	es8389_set_bias_level(component, SND_SOC_BIAS_STANDBY);
 
@@ -903,6 +919,7 @@ static void es8389_remove(struct snd_soc_component *component)
 	regmap_write(es8389->regmap, ES8389_ISO_CTL, 0xC1);
 	regmap_write(es8389->regmap, ES8389_PULL_DOWN, 0x00);
 
+	es8389_disable_mclk(es8389);
 }
 
 static const struct snd_soc_component_driver soc_codec_dev_es8389 = {
@@ -964,6 +981,23 @@ static int es8389_i2c_probe(struct i2c_client *i2c_client)
 	if (IS_ERR(es8389->regmap))
 		return dev_err_probe(&i2c_client->dev, PTR_ERR(es8389->regmap),
 			"regmap_init() failed\n");
+
+	/* Keep these resources alive until after the component is unregistered. */
+	es8389->mclk = devm_clk_get_optional(&i2c_client->dev, "mclk");
+	if (IS_ERR(es8389->mclk))
+		return dev_err_probe(&i2c_client->dev, PTR_ERR(es8389->mclk),
+				     "unable to get mclk\n");
+
+	es8389->speaker_amp = devm_gpiod_get_optional(&i2c_client->dev,
+						    "speaker-amp", GPIOD_OUT_LOW);
+	if (IS_ERR(es8389->speaker_amp))
+		return dev_err_probe(&i2c_client->dev, PTR_ERR(es8389->speaker_amp),
+				     "failed to get speaker amp gpio\n");
+
+	ret = devm_add_action_or_reset(&i2c_client->dev,
+				      es8389_disable_mclk, es8389);
+	if (ret)
+		return ret;
 
 	ret =  devm_snd_soc_register_component(&i2c_client->dev,
 			&soc_codec_dev_es8389,

@@ -54,8 +54,9 @@
 		__overlay__ {
 			i2c_gpio_bus:i2c-gpio {
                 		compatible = "i2c-gpio";
-                		sda-gpios = <&gpio 26 2>;
-                		scl-gpios = <&gpio 16 2>;
+                		sda-gpios = <&gpio 26 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+                		scl-gpios = <&gpio 16 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+                		/* Match the working Trixie bit-banging delay; keep open-drain GPIOs. */
                 		i2c-gpio,delay-us = <40>;
                 		i2c-gpio,timeout-ms = <200>;
                 		#address-cells = <1>;

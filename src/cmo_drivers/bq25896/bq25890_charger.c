@@ -1326,18 +1326,6 @@ static int bq25890_get_chip_version(struct bq25890_device *bq)
 	return 0;
 }
 
-static int bq25890_irq_probe(struct bq25890_device *bq)
-{
-	struct gpio_desc *irq;
-
-	irq = devm_gpiod_get(bq->dev, BQ25890_IRQ_PIN, GPIOD_IN);
-	if (IS_ERR(irq))
-		return dev_err_probe(bq->dev, PTR_ERR(irq),
-				     "Could not probe irq pin.\n");
-
-	return gpiod_to_irq(irq);
-}
-
 static int bq25890_fw_read_u32_props(struct bq25890_device *bq)
 {
 	int ret;
@@ -1492,14 +1480,6 @@ static int bq25890_probe(struct i2c_client *client)
 		return ret;
 	}
 
-	/*if (client->irq <= 0)
-		//client->irq = bq25890_irq_probe(bq);
-
-	if (client->irq < 0) {
-		dev_err(dev, "No irq resource found.\n");
-		//return client->irq;
-	}*/
-
 	/* OTG reporting */
 	bq->usb_phy = devm_usb_get_phy(dev, USB_PHY_TYPE_USB2);
 
@@ -1518,23 +1498,18 @@ static int bq25890_probe(struct i2c_client *client)
 	ret = bq25890_power_supply_init(bq);
 	if (ret < 0)
 		return dev_err_probe(dev, ret, "registering power supply\n");
-        if (client->irq>0) {
-	ret = devm_request_threaded_irq(dev, client->irq, NULL,
+	if (client->irq > 0) {
+		ret = devm_request_threaded_irq(dev, client->irq, NULL,
 					bq25890_irq_handler_thread,
 					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 					BQ25890_IRQ_PIN, bq);
-					
-			if (ret)
-			{
-        			dev_warn(dev, "request irq failed, use polling mode\n");
-        			//return ret;
-       			 }		
-					
-					}else {
-    dev_warn(dev, "no irq provided, use polling mode\n");
-}
-	//if (ret)
-		//return ret;
+		if (ret)
+			dev_warn(dev, "request IRQ failed (%d); refreshing status on reads\n",
+				 ret);
+	} else {
+		/* bq25890_update_state() refreshes status on every property read. */
+		dev_info(dev, "no IRQ configured; refreshing status on reads\n");
+	}
 
 	if (!IS_ERR_OR_NULL(bq->usb_phy)) {
 		INIT_WORK(&bq->usb_work, bq25890_usb_work);

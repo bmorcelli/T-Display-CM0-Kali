@@ -523,6 +523,9 @@ install_kernel_modules() {
             rtc-rx8130.ko)
                 target_dir="${modules_root}/kernel/drivers/rtc"
                 ;;
+            rtc-ds1307.ko)
+                target_dir="${modules_root}/updates/cm0"
+                ;;
             qmi8658c.ko)
                 target_dir="${modules_root}/kernel/drivers/iio/imu"
                 ;;
@@ -541,6 +544,70 @@ install_kernel_modules() {
         log "depmod not found, skip module dependency refresh"
     fi
 
+}
+
+install_wifi_fix() {
+    local kernel_release
+    local modules_root
+    local wifi_dir
+    local fw_dir
+    local nexmon_override
+
+    wifi_dir="${RESOURCE_DIR}/wifi_fix"
+    if [ ! -d "${wifi_dir}" ]; then
+        log "wifi_fix resources not present, skip wifi brcmfmac fix"
+        return 0
+    fi
+
+    kernel_release="$(uname -r)"
+    modules_root="/lib/modules/${kernel_release}"
+
+    log "install stock brcmfmac modules (replaces brcmfmac-nexmon, which lacks Cypress SDIO IDs)"
+    run install -d -m 0755 "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bca"
+    run install -d -m 0755 "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/wcc"
+    run install -d -m 0755 "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cyw"
+    run install -d -m 0755 "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmutil"
+
+    backup_file "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko.xz"
+    run install -m 0644 "${wifi_dir}/modules/brcmfmac.ko.xz" \
+        "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko.xz"
+    run install -m 0644 "${wifi_dir}/modules/bca/brcmfmac-bca.ko.xz" \
+        "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bca/brcmfmac-bca.ko.xz"
+    run install -m 0644 "${wifi_dir}/modules/wcc/brcmfmac-wcc.ko.xz" \
+        "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/wcc/brcmfmac-wcc.ko.xz"
+    run install -m 0644 "${wifi_dir}/modules/cyw/brcmfmac-cyw.ko.xz" \
+        "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cyw/brcmfmac-cyw.ko.xz"
+    run install -m 0644 "${wifi_dir}/modules/brcmutil.ko.xz" \
+        "${modules_root}/kernel/drivers/net/wireless/broadcom/brcm80211/brcmutil/brcmutil.ko.xz"
+
+    nexmon_override="${modules_root}/updates/dkms/brcmfmac.ko.xz"
+    if [ -f "${nexmon_override}" ]; then
+        log "disable brcmfmac-nexmon override at ${nexmon_override}"
+        run mv "${nexmon_override}" "${nexmon_override}.disabled-by-lilygo"
+    fi
+
+    fw_dir="/lib/firmware/brcm"
+    log "install CYW43439 firmware (board ships a Cypress chip, not covered by firmware-nexmon)"
+    run install -d -m 0755 "${fw_dir}"
+    run install -m 0644 "${wifi_dir}/firmware/cyfmac43439-sdio.bin" "${fw_dir}/cyfmac43439-sdio.bin"
+    run install -m 0644 "${wifi_dir}/firmware/cyfmac43439-sdio.clm_blob" "${fw_dir}/cyfmac43439-sdio.clm_blob"
+    run install -m 0644 "${wifi_dir}/firmware/cyfmac43439-sdio.txt" "${fw_dir}/brcmfmac43439-sdio.txt"
+    run ln -sf cyfmac43439-sdio.bin "${fw_dir}/brcmfmac43439-sdio.bin"
+    run ln -sf cyfmac43439-sdio.clm_blob "${fw_dir}/brcmfmac43439-sdio.clm_blob"
+
+    if command -v depmod >/dev/null 2>&1; then
+        run depmod -a "${kernel_release}"
+    fi
+
+    if [ -d /etc/netplan ]; then
+        log "force netplan renderer to NetworkManager (avoids systemd-networkd racing NM for wlan0/eth0, which blocks wpa_supplicant and starves DHCP)"
+        write_file /etc/netplan/60-lilygo-renderer.yaml 0644 \
+"network:
+  version: 2
+  renderer: NetworkManager"
+        run_may_fail systemctl disable --now systemd-networkd.service systemd-networkd.socket
+        run_may_fail netplan generate
+    fi
 }
 
 install_dtbo() {
@@ -679,12 +746,17 @@ merge_cmdline_txt() {
             ;;
     esac
 
-    for token in vt.global_cursor_default=0 cfg80211.ieee80211_regdom=CN; do
+    for token in vt.global_cursor_default=0 video=DSI-1:panel_orientation=left_side_up; do
         case " ${current} " in
             *" ${token} "*) ;;
             *) current="${current} ${token}" ;;
         esac
     done
+
+    case " ${current} " in
+        *" cfg80211.ieee80211_regdom="*) ;;
+        *) current="${current} cfg80211.ieee80211_regdom=BR" ;;
+    esac
 
     case " ${current} " in
         *" root="*) ;;
@@ -750,7 +822,8 @@ install_services() {
                     log "configure Raspberry Pi desktop mode"
                     run systemctl enable keyboard_lilygo.service
                     run systemctl disable lilygo_phone_desktop.service
-                    run systemctl set-default graphical.target
+                    run_may_fail systemctl disable lightdm.service
+                    run systemctl set-default multi-user.target
                     ;;
                 none)
                     log "desktop mode is none, leave keyboard and LVGL services unchanged"
@@ -828,6 +901,7 @@ main() {
     install_user_binaries
     install_runtime_debs
     install_kernel_modules
+    install_wifi_fix
     install_dtbo
     merge_config_txt
     merge_cmdline_txt
