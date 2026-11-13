@@ -1,0 +1,4 @@
+0x13150311	bq27xxx_battery_update	/mnt/c/Users/Bernardo/Downloads/T-Display-CM0-main/T-Display-CM0-main/src/cmo_drivers/bq27220/bq27xxx_battery	EXPORT_SYMBOL_GPL	
+0xfa558af4	bq27xxx_battery_setup	/mnt/c/Users/Bernardo/Downloads/T-Display-CM0-main/T-Display-CM0-main/src/cmo_drivers/bq27220/bq27xxx_battery	EXPORT_SYMBOL_GPL	
+0x14b9f417	bq27xxx_battery_teardown	/mnt/c/Users/Bernardo/Downloads/T-Display-CM0-main/T-Display-CM0-main/src/cmo_drivers/bq27220/bq27xxx_battery	EXPORT_SYMBOL_GPL	
+0x9691726f	bq27xxx_battery_battery_pm_ops	/mnt/c/Users/Bernardo/Downloads/T-Display-CM0-main/T-Display-CM0-main/src/cmo_drivers/bq27220/bq27xxx_battery	EXPORT_SYMBOL_GPL	

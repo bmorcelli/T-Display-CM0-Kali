@@ -1,0 +1,1 @@
+/mnt/c/Users/Bernardo/Downloads/T-Display-CM0-main/T-Display-CM0-main/src/cmo_drivers/bq27220/bq27xxx_battery_i2c.o
